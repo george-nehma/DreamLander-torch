@@ -283,6 +283,7 @@ class LanderEnv(Env):
             "is_last": bool(is_last),
             "is_terminal": bool(is_terminal),
             'log/reward': float(reward),
+            'log/dynstates': np.concatenate([quaternion.as_float_array(self._x[0])] + list(self._x[1:3])).astype(np.float32)
         }
         return obs
     

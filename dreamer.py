@@ -23,6 +23,13 @@ from torch import distributions as torchd
 
 import matplotlib.pyplot as plt
 
+import datetime
+# Replace {timestamp} in all arguments
+for i, arg in enumerate(sys.argv):
+    if '{timestamp}' in arg:
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        sys.argv[i] = arg.replace('{timestamp}', timestamp)
+
 
 to_np = lambda x: x.detach().cpu().numpy()
 
@@ -323,6 +330,8 @@ def main(config):
                 video_pred = agent._wm.video_pred(next(eval_dataset))
                 logger.video("eval_openl", to_np(video_pred))
 
+            data = np.load('logs/dreamer/20250526_184558/eval_eps/20250526T184603-2e5a70db8eeb41ffbb8146ccacea98e7-1001.npz')
+            print(data.files)
             # fig = plt.figure()
             # ax = fig.add_subplot(1, 1, 1)
             # ax.plot([0, 1, 2, 3], [10, 20, 25, 30])

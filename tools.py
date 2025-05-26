@@ -149,11 +149,11 @@ def simulate(
         step, episode, done, length, obs, agent_state, reward = state
     while (steps and step < steps) or (episodes and episode < episodes):
         # reset envs if necessary
-        if done.any():
-            indices = [index for index, d in enumerate(done) if d]
-            results = [envs[i].reset() for i in indices]
-            results = [r() for r in results]
-            for index, result in zip(indices, results):
+        if done.any():                                             # check if any env is done
+            indices = [index for index, d in enumerate(done) if d]      # find indices of done envs
+            results = [envs[i].reset() for i in indices]                # reset done envs
+            results = [r() for r in results]                            # call the reset functions
+            for index, result in zip(indices, results): # replacing obs with reset results
                 t = result.copy()
                 t = {k: convert(v) for k, v in t.items()}
                 # action will be added to transition in add_to_cache
@@ -164,8 +164,10 @@ def simulate(
                 # replace obs with done by initial state
                 obs[index] = result
         # step agents
-        obs = {k: np.stack([o[k] for o in obs]) for k in obs[0] if "log_" not in k}
-        action, agent_state = agent(obs, done, agent_state)
+        obs = {k: np.stack([o[k] for o in obs]) for k in obs[0] if "log_" not in k} # k are the keys of obs (obs is a list before this) (would be stacking the multiple obs if they existed)
+        action, agent_state = agent(obs, done, agent_state) # get the next action from the agent based on the current obs
+
+        # converting the action to a numpy array if it is a dict
         if isinstance(action, dict):
             action = [
                 {k: np.array(action[k][i].detach().cpu()) for k in action}
@@ -173,9 +175,9 @@ def simulate(
             ]
         else:
             action = np.array(action)
-        assert len(action) == len(envs)
+        assert len(action) == len(envs) # check if action length matches envs length
         # step envs
-        results = [e.step(a) for e, a in zip(envs, action)]
+        results = [e.step(a) for e, a in zip(envs, action)] # step each env with the corresponding action
         results = [r() for r in results]
         obs, reward, done = zip(*[p[:3] for p in results])
         obs = list(obs)
@@ -744,7 +746,7 @@ class Optimizer:
             "sgd": lambda: torch.optim.SGD(parameters, lr=lr),
             "momentum": lambda: torch.optim.SGD(parameters, lr=lr, momentum=0.9),
         }[opt]()
-        self._scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+        self._scaler = torch.amp.GradScaler()
 
     def __call__(self, loss, params, retain_graph=True):
         assert len(loss.shape) == 0, loss.shape
@@ -940,7 +942,7 @@ def tensorstats(tensor, prefix=None):
         "mean": to_np(torch.mean(tensor)),
         "std": to_np(torch.std(tensor)),
         "min": to_np(torch.min(tensor)),
-        "max": to_npsimulate(torch.max(tensor)),
+        "max": to_np(torch.max(tensor)),
     }
     if prefix:
         metrics = {f"{prefix}_{k}": v for k, v in metrics.items()}

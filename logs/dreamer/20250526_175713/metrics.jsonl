@@ -1,0 +1,4 @@
+{"step": 0, "dataset_size": 2000.0, "train_return": -1048193.875, "train_length": 1000.0, "train_episodes": 2.0}
+{"step": 0, "dataset_size": 2000.0, "train_return": -1021269.5, "train_length": 1000.0, "train_episodes": 2.0}
+{"step": 2500}
+{"step": 2500, "eval_return": -791670.1125, "eval_length": 1000.0, "eval_episodes": 10.0}
