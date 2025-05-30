@@ -7,11 +7,11 @@ defaults:
   offline_evaldir: ''
   seed: 0
   deterministic_run: False
-  steps: 1e5
-  parallel: False
+  steps: 3e5
+  parallel: True
   eval_every: 1e4
   eval_episode_num: 10
-  log_every: 1e4
+  log_every: 5e3
   reset_every: 0
   device: 'cuda:0'
   compile: True
@@ -22,10 +22,10 @@ defaults:
   # Environment
   task: 'land_custom'
   size: [64, 64]
-  action_repeat: 2
-  time_limit: 1000
+  action_repeat: 1
+  time_limit: 20000
   grayscale: False
-  prefill: 2500
+  prefill: 10000
   reward_EMA: True
 
   # Model
@@ -68,7 +68,7 @@ defaults:
   model_lr: 1e-4
   opt_eps: 1e-8
   grad_clip: 1000
-  dataset_size: 1000000
+  dataset_size: 30000
   opt: 'adam'
 
   # Behavior.

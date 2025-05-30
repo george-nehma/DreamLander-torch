@@ -22,6 +22,7 @@ from torch import nn
 from torch import distributions as torchd
 
 import matplotlib.pyplot as plt
+import pickle
 
 import datetime
 # Replace {timestamp} in all arguments
@@ -161,7 +162,7 @@ def make_env(config, mode, id):
         env = wrappers.NormalizeActions(env)
 
     elif suite == "land":
-        import envs.lander as lander
+        import envs.lander2 as lander
 
         env = lander.LanderEnv(task)
         env = wrappers.NormalizeActions(env)
@@ -232,6 +233,8 @@ def main(config):
     logdir.mkdir(parents=True, exist_ok=True)
     config.traindir.mkdir(parents=True, exist_ok=True)
     config.evaldir.mkdir(parents=True, exist_ok=True)
+    with open('configs.pkl', 'wb') as f:
+        pickle.dump(config,f)
     step = count_steps(config.traindir)
     # step in logger is environmental step
     logger = tools.Logger(logdir, config.action_repeat * step)
@@ -246,7 +249,7 @@ def main(config):
         directory = config.offline_evaldir.format(**vars(config))
     else:
         directory = config.evaldir
-    eval_eps = tools.load_episodes(directory, limit=1)
+    eval_eps = tools.load_episodes(directory, limit=5)
     make = lambda mode, id: make_env(config, mode, id)
     train_envs = [make("train", i) for i in range(config.envs)]
     eval_envs = [make("eval", i) for i in range(config.envs)]
@@ -330,15 +333,84 @@ def main(config):
                 video_pred = agent._wm.video_pred(next(eval_dataset))
                 logger.video("eval_openl", to_np(video_pred))
 
-            data = np.load('logs/dreamer/20250526_184558/eval_eps/20250526T184603-2e5a70db8eeb41ffbb8146ccacea98e7-1001.npz')
-            print(data.files)
-            # fig = plt.figure()
-            # ax = fig.add_subplot(1, 1, 1)
-            # ax.plot([0, 1, 2, 3], [10, 20, 25, 30])
-            # ax.set_title("Sample Plot")
-            # ax.set_xlabel("X Axis")
-            # ax.set_ylabel("Y Axis")
-            # plt.show()
+            recent_item = list(eval_eps.items())[-1]
+            state_traj = recent_item[1]["log/dynstates"]
+            actions = recent_item[1]["action"]
+            main_thrust = np.array([arr[0] for arr in actions])
+            f_thrust = np.array([arr[1:5] for arr in actions])
+            r_thrust = np.array([arr[5:9] for arr in actions])
+            b_thrust = np.array([arr[9:13] for arr in actions])
+            l_thrust = np.array([arr[13:17] for arr in actions])
+            quat = np.array([arr[:4] for arr in state_traj])
+            pos = np.array([arr[4:7] for arr in state_traj])
+            ang_vel = np.array([arr[7:10] for arr in state_traj])
+            vel = np.array([arr[10:13] for arr in state_traj])
+            print("Plotting trajectories.")
+
+            fig = plt.figure(1, figsize=(12, 8))
+            fig.clf()
+            ax = fig.add_subplot(2, 2, 1)
+            ax.plot(quat)
+            ax.set_xlabel("Time")
+            ax.set_ylabel("Quaternion")
+            ax.set_title("Quaternion Trajectory")
+            ax.legend(["x", "y", "z", "w"])
+            ax = fig.add_subplot(2, 2, 2)
+            ax.plot(pos)
+            ax.set_xlabel("Time")
+            ax.set_ylabel("Position [m]")
+            ax.set_title("Position Trajectory")
+            ax.legend(["x", "y", "z"])
+            ax = fig.add_subplot(2, 2, 3)
+            ax.plot(vel)
+            ax.set_xlabel("Time")
+            ax.set_ylabel("Velocity [m/s]")
+            ax.set_title("Velocity Trajectory")
+            ax.legend(["x", "y", "z"])
+            ax = fig.add_subplot(2, 2, 4)
+            ax.plot(ang_vel)
+            ax.set_xlabel("Time")
+            ax.set_ylabel("Angular Velocity [rad/s]")
+            ax.legend(["x", "y", "z"])
+            ax.set_title("Angular Velocity Trajectory")
+            plt.tight_layout()
+            plt.show(block=False)
+            plt.pause(1)
+
+            fig2 = plt.figure(2, figsize=(12, 8))
+            plt.clf()
+            ax2 = fig2.add_subplot(3, 2, 1)
+            ax2.plot(main_thrust)
+            ax2.set_xlabel("Time")
+            ax2.set_ylabel("Thrust [N]")
+            ax2.set_title("Main Thrust")
+            ax2 = fig2.add_subplot(3, 2, 2)
+            ax2.plot(f_thrust)
+            ax2.set_xlabel("Time")
+            ax2.set_ylabel("Thrust [N]")
+            ax2.set_title("Forward Thrust")
+            ax2.legend(["-z", "+y", "+z", "-y"])
+            ax2 = fig2.add_subplot(3, 2, 3)
+            ax2.plot(r_thrust)
+            ax2.set_xlabel("Time")
+            ax2.set_ylabel("Thrust [N]")
+            ax2.set_title("Right Thrust")
+            ax2.legend(["-z", "+x", "+z", "-x"])
+            ax2 = fig2.add_subplot(3, 2, 4)
+            ax2.plot(b_thrust)
+            ax2.set_xlabel("Time")
+            ax2.set_ylabel("Thrust [N]")
+            ax2.legend(["-z", "-y", "+z", "+y"])
+            ax2.set_title("Backward Thrust")
+            ax2 = fig2.add_subplot(3, 2, 5)
+            ax2.plot(l_thrust)
+            ax2.set_xlabel("Time")
+            ax2.set_ylabel("Thrust [N]")
+            ax2.legend(["-z", "-x", "+z", "+x"])
+            ax2.set_title("Left Thrust")
+            plt.tight_layout()
+            plt.show(block=False)
+            plt.pause(1)
 
         print("Start training.")
         state = tools.simulate(

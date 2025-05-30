@@ -13,50 +13,24 @@ import quaternion
 class LanderVehicle:
     def __init__(self, mass=2000, inertia_tensor=np.eye(3), thruster_directions=None, thruster_positions=None, Isp=225):
         self.mass = np.array([mass])
-        self.inertia = 50*self.mass/5*inertia_tensor
+        self.inertia = 0.25*self.mass/5*inertia_tensor
         self.Isp = Isp
 
         if thruster_positions is None:
             self.thruster_positions = np.array([     # all positions in meters in body frame and from CG of vehicle
-                [0.0, 0.0, -2.0],
-                [5.0, 0.0, 0.0],
-                [5.0, 0.0, 0.0],
-                [5.0, 0.0, 0.0],
-                [5.0, 0.0, 0.0],
-                [-5.0, 0.0, 0.0],
-                [-5.0, 0.0, 0.0],
-                [-5.0, 0.0, 0.0],
-                [-5.0, 0.0, 0.0],
-                [0.0, 5.0, 0.0],
-                [0.0, 5.0, 0.0],
-                [0.0, 5.0, 0.0],
-                [0.0, 5.0, 0.0],
-                [0.0, -5.0, 0.0],
-                [0.0, -5.0, 0.0],
-                [0.0, -5.0, 0.0],
-                [0.0, -5.0, 0.0],
+                [0.0, -2.0, -1.0],
+                [0.0, 2.0, -1.0],
+                [-2.0, 0.0, -1.0],
+                [2.0, 0.0, -1.0],               
             ])
         else:
             self.thruster_positions = thruster_positions
 
         if thruster_directions is None:
             self.thruster_directions = np.array([    # all directions in body frame (FRD)
-                [0.0, 0.0, 1.0],  # main engine
-                [0.0, 0.0, -1.0],  # Front - RCS engines start at top and rotate clockwise looking from CG of vehicle out
-                [0.0, 1.0, 0.0],
-                [0.0, 0.0, 1.0],
-                [0.0, -1.0, 0.0],
-                [0.0, 0.0, -1.0],  # Right
-                [1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0],
-                [-1.0, 0.0, 0.0],
-                [0.0, 0.0, -1.0],  # Back
                 [0.0, -1.0, 0.0], 
-                [0.0, 0.0, 1.0],
-                [0.0, 1.0, 0.0],
-                [0.0, 0.0, -1.0],  # Left
+                [0.0, 1.0, 0.0], 
                 [-1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0],
                 [1.0, 0.0, 0.0],
             ]).T
         else:
@@ -116,7 +90,7 @@ class LanderEnv(Env):
         self.qmgn = np.array([360,67,67])
         self.rlim = np.array([5,5,5])
         self.vlim = np.array([2,2,2])
-        self.q_radlim = np.array([0.2,0.2,0.2])
+        self.q_radlim = np.array([0.2,0.2,np.inf])
         self.wlim = np.array([0.2,0.2,0.2])
         self.gslim = 79
 
@@ -152,19 +126,12 @@ class LanderEnv(Env):
 
         # Action space: [mainEngine, RCS1, RCS2, RCS3, RCS4, RCS5, RCS6, RCS7, RCS8, RCS9, RCS10, RCS11, RCS12, RCS13, RCS14, RCS15, RCS16]
         # 4 RCS thrusters per side 
-        self.actionHigh = np.hstack([
-            40000,  # max thrust main engine [N] 46700
-            445*np.ones(16) # max thrust of RCS thrusters [N] 445
-        ]).astype(np.float32)
+        self.actionHigh = np.full(4, 5000, dtype=np.float32) # max thrust of RCS thrusters [N] 5000
 
-        self.actionLow = np.hstack([
-            0,  # max thrust main engine [N] 4670
-            np.zeros(16) # max thrust of RCS thrusters [N]
-        ]).astype(np.float32)
-
+        self.actionLow = np.full(4, 1000, dtype=np.float32) # min thrust of RCS thrusters [N] 1000
 
         self.obs_space = gym.spaces.Dict({
-                "state": gym.spaces.Box(dtype=np.float32, shape= self.stateHigh.shape, low=-self.stateHigh, high=self.stateHigh),
+                'state': gym.spaces.Box(dtype=np.float32, shape= self.stateHigh.shape, low=-self.stateHigh, high=self.stateHigh),
                 'reward': gym.spaces.Box(dtype=np.float32, shape=(), low=-np.inf, high=np.inf),
                 'is_first': gym.spaces.Box(dtype=bool, shape=(), low=0, high=1),
                 'is_last': gym.spaces.Box(dtype=bool, shape=(), low=0, high=1),
@@ -198,7 +165,6 @@ class LanderEnv(Env):
         self._goalState = np.array([])
         self._goalLat = np.deg2rad(0.6742)
         self._goalLon = np.deg2rad(23.4371)
-        self._alpha = np.deg2rad(5)
         self._betax = np.deg2rad(np.random.uniform(-22.5,22.5)) # roll
         self._betay = np.deg2rad(np.random.uniform(22.5,67.5)) # pitch
         self._betaz = np.deg2rad(np.random.uniform(-22.5,22.5)) # yaw
@@ -256,7 +222,6 @@ class LanderEnv(Env):
             tau = 100
             v_hat = self._vel - np.array([0,0,-1]).T
             r_hat = np.array([0,0,self._position[2]]).T
-            
 
         self._tgo = np.linalg.norm(r_hat)/np.linalg.norm(v_hat)
         self._vtarget = -np.linalg.norm(self._v0)*(r_hat/np.linalg.norm(r_hat))*(1-np.exp(-self._tgo/tau))
@@ -324,6 +289,8 @@ class LanderEnv(Env):
         vel = state[3]
         mass = state[4]
 
+        self.lander.inertia = 0.25*mass[0]/5*np.eye(3) # inertia tensor in body frame
+
         self.forceBody = np.dot(self.lander.thruster_directions, action.reshape(-1,1))
         momentsBody = np.sum(np.cross(self.lander.thruster_positions,self.forceBody.flatten()),axis=0)
 
@@ -331,10 +298,10 @@ class LanderEnv(Env):
                                 [quatB2E.z, 0, -quatB2E.x],
                                 [-quatB2E.y, quatB2E.x, 0]])
         
-        OM = np.vstack((quatB2E.w*np.eye(3) + _quatx, [[-quatB2E.x, -quatB2E.y, -quatB2E.z]]))
+        Xi = np.vstack((quatB2E.w*np.eye(3) + _quatx, [[-quatB2E.x, -quatB2E.y, -quatB2E.z]]))
         Psi = np.vstack((quatB2E.w*np.eye(3) - _quatx, [[-quatB2E.x, -quatB2E.y, -quatB2E.z]]))
 
-        A_N2B = OM.T @ Psi
+        A_N2B = Xi.T @ Psi
         forceInertial = A_N2B.T @ self.forceBody
 
         _angvelx = np.array([[0, -angvel[2], angvel[1]], 
@@ -367,13 +334,13 @@ class LanderEnv(Env):
 
         gs = np.arctan(np.sqrt(self._position[1]**2 + self._position[2]**2)/self._position[0])
 
-        landed = (self._position[2] < 0 and
+        self.landed = (self._position[2] < 0 and
             np.all(np.linalg.norm(self._position) < self.rlim) and
             np.all(np.linalg.norm(self._vel) < self.vlim) and
             np.all(euler < self.q_radlim) and
-            np.all(self._angvel < self.wlim) and
-            gs < self.gslim)
-        if landed:
+            np.all(self._angvel < self.wlim and gs < self.gslim))
+        
+        if self.landed:
             k = 10
         else: k = 0
 
@@ -398,13 +365,14 @@ class LanderEnv(Env):
         self.step_count += 1
         # Check for non-finite or out-of-bounds state
         nonfinite = not np.isfinite(self._state).all()
-        out_of_bounds = np.any(self._state[:3] > 1e3) or np.any(self._state[:3] < -1e3)
-        self.done = self.step_count >= self.max_steps or nonfinite or out_of_bounds
+        out_of_bounds =  np.any(self._position[2] < 0) or np.any(self._position > 1e4)
+        # out_of_bounds = np.any(self._state[:3] > 1e3) or np.any(self._state[:3] < -1e3)
+        self.done = self.step_count >= self.max_steps or nonfinite or out_of_bounds or self.landed
         obs = self._obs(
             reward=reward,
             is_first=False,
             is_last=self.done,
-            is_terminal=self.done,
+            is_terminal=self.landed,
         )
         # If state is invalid, reset the environment next step
         if nonfinite or out_of_bounds:
