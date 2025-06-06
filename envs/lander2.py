@@ -128,7 +128,7 @@ class LanderEnv(Env):
         # 4 RCS thrusters per side 
         self.actionHigh = np.full(4, 5000, dtype=np.float32) # max thrust of RCS thrusters [N] 5000
 
-        self.actionLow = np.full(4, 1000, dtype=np.float32) # min thrust of RCS thrusters [N] 1000
+        self.actionLow = np.full(4, 0, dtype=np.float32) # min thrust of RCS thrusters [N] 1000
 
         self.obs_space = gym.spaces.Dict({
                 'state': gym.spaces.Box(dtype=np.float32, shape= self.stateHigh.shape, low=-self.stateHigh, high=self.stateHigh),
@@ -310,9 +310,8 @@ class LanderEnv(Env):
 
         angvel_dot = np.linalg.inv(self.lander.inertia) @ (-_angvelx @ self.lander.inertia @ angvel + momentsBody)
 
-
-        q_w = quaternion.as_quat_array(np.append(0,angvel))
-        quat_dot = 0.5*quatB2E*q_w
+        quat_dot = 0.5*(Xi@angvel)
+        quat_dot = quaternion.as_quat_array(quat_dot)
 
         position_dot = vel
         vel_dot = forceInertial/mass + self.gravity
