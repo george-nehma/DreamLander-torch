@@ -162,7 +162,7 @@ def make_env(config, mode, id):
         env = wrappers.NormalizeActions(env)
 
     elif suite == "land":
-        import envs.lander3 as lander
+        import envs.lander4 as lander
 
         env = lander.LanderEnv(task)
         env = wrappers.NormalizeActions(env)

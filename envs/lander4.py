@@ -11,31 +11,9 @@ import quaternion
 
 
 class LanderVehicle:
-    def __init__(self, mass=500, inertia_tensor=np.eye(3), thruster_directions=None, thruster_positions=None, Isp=225):
+    def __init__(self, mass=500, inertia = 10, thruster_directions=None, thruster_positions=None, Isp=225):
         self.mass = np.array([mass])
-        # self.inertia = 0.25*self.mass/5*inertia_tensor
-        # self.Isp = Isp
-
-        # if thruster_positions is None:
-        #     self.thruster_positions = np.array([     # all positions in meters in body frame and from CG of vehicle
-        #         [0.0, -2.0, -1.0],
-        #         [0.0, 2.0, -1.0],
-        #         [-2.0, 0.0, -1.0],
-        #         [2.0, 0.0, -1.0],               
-        #     ])
-        # else:
-        #     self.thruster_positions = thruster_positions
-
-        # if thruster_directions is None:
-        #     self.thruster_directions = np.array([    # all directions in body frame (FRD)
-        #         [0.0, -1.0, 0.0], 
-        #         [0.0, 1.0, 0.0], 
-        #         [-1.0, 0.0, 0.0],
-        #         [1.0, 0.0, 0.0],
-        #     ]).T
-        # else:
-        #     self.thruster_directions = thruster_directions
-
+        self.inertia_yy = self.mass*(5**2)
 
 def moon_env():
     radius = 1737400 # [m]
@@ -79,43 +57,41 @@ class LanderEnv(Env):
             raise NotImplementedError(planet)
         
         self._state = None
-        # self._x = None
         self.num_episodes = num_episodes
         self.lander = lander_veh
         self.gravity = np.array([0,-6.6743e-11*self.planet_mass/(self.radius**2)])
         self.forceBody = None
 
-        # self.qlim = np.array([360,80,80])
-        # self.qmgn = np.array([360,67,67])
         self.rlim = np.array([2,2])
         self.vlim = np.array([0.5,0.5])
-        # self.q_radlim = np.array([0.2,0.2,np.inf])
-        # self.wlim = np.array([0.2,0.2,0.2])
-        # self.gslim = 79
 
         self.max_steps = max_steps
         self.step_count = 0
 
         # State space: [x,z, x_vel, z_vel]
         self.stateHigh = np.array([
-            np.inf,  # max x position [m]
-            np.inf,  # max z position [m]
-            np.inf,  # max x velocity [m]
-            np.inf   # max z velocity [m]
+            np.inf,   # max x position [m]
+            np.inf,   # max z position [m]
+            np.inf,   # max x velocity [m]
+            np.inf,   # max z velocity [m]
+            np.pi,  # max roll angle [rad]
+            np.inf    # max angular vel [rad/s]
         ], dtype=np.float32)
 
         self.stateLow = np.array([
-            np.inf,  # min x position [m]
-            0,       # min z position [m]
-            np.inf,  # min x velocity [m]
-            np.inf   # min z velocity [m]
+            np.inf,   # min x position [m]
+            0,        # min z position [m]
+            np.inf,   # min x velocity [m]
+            np.inf,   # min z velocity [m]
+            -np.pi, # min roll angle [rad]
+            np.inf    # min angular vel [rad/s]
         ], dtype=np.float32)
 
         # Action space: [+x thrust, -x thrust, vertical thrust]
         # 4 RCS thrusters per side 
-        self.actionHigh = np.full(3, 3000, dtype=np.float32) # max thrust of RCS thrusters [N] 1000
+        self.actionHigh = np.array([3000, 3000, 3000, 3000], dtype=np.float32) # max thrust of RCS thrusters [N] and moment 
 
-        self.actionLow = np.full(3, 0, dtype=np.float32) # min thrust of RCS thrusters [N] 1000
+        self.actionLow = np.array([0, 0, 0, -3000], dtype=np.float32) # min thrust of RCS thrusters [N] and moment
 
         self.obs_space = gym.spaces.Dict({
                 'state': gym.spaces.Box(dtype=np.float32, shape= self.stateHigh.shape, low=self.stateLow, high=self.stateHigh),
@@ -164,7 +140,11 @@ class LanderEnv(Env):
         self._position = np.array([np.random.uniform(0,200), 
                                    np.random.uniform(200,300)]).T # initial position [m]
         
-        self._state = np.hstack((self._position, self._vel))
+        self._angle = np.array([np.random.uniform(-np.pi/6, np.pi/6)]) # initial roll angle [rad]
+
+        self._angvel = np.array([np.random.uniform(-0.3, 0.3)]) # initial angular velocity [rad/s]
+        
+        self._state = np.hstack((self._position, self._vel, self._angle, self._angvel))
 
         self.step_count = 0
         self.done = False
@@ -227,11 +207,15 @@ class LanderEnv(Env):
         self._state = yk + (dt / 6) * (f1 + (2 * f2) + (2 * f3) + f4)
         self._position = self._state[0:2]
         self._vel = self._state[2:4]
+        self._angle = self._state[4]
+        self._angvel = self._state[5]
 
     def sixDOFDynamics(self, t, state, *args):
         action = args[0]
         position = state[0:2]
         vel = state[2:4]
+        theta = state[4]
+        omega = state[5]
 
         self.mpower = np.any(action[2])
         self.spower = np.any(action[0:2]) 
@@ -240,11 +224,17 @@ class LanderEnv(Env):
         self.forceBody = np.array([xthrust, zthrust])  # force in body frame
 
         mass = self.lander.mass
+        inertia = self.lander.inertia_yy
 
-        position_dot = vel
-        vel_dot = self.forceBody/mass + self.gravity
+        moment_body = action[3]
+        acc_body = self.forceBody/mass + np.array([-self.gravity[1]*np.cos(theta), self.gravity[1]*np.sin(theta)])
 
-        x_dot = np.hstack ((position_dot, vel_dot))
+        position_dot = np.array([vel[0]*np.cos(theta) + vel[1]*np.sin(theta), -vel[0]*np.sin(theta) + vel[1]*np.cos(theta)])
+        vel_dot = acc_body + omega*np.array([-vel[1], vel[0]])
+        theta_dot = omega
+        omega_dot = moment_body/inertia
+
+        x_dot = np.hstack ((position_dot, vel_dot,theta_dot,omega_dot))
         return x_dot
     
     def reward_func(self):
@@ -253,22 +243,25 @@ class LanderEnv(Env):
 
         self.landed = (self._position[1] <= 0 and
             np.all(np.linalg.norm(self._position) < self.rlim) and
-            np.all(np.linalg.norm(self._vel) < self.vlim))   
+            np.all(np.linalg.norm(self._vel) < self.vlim) and
+            np.abs(self._angle) < 0.087)   
 
         self.crashed = (self._position[1] <= 0 and
             np.all(np.linalg.norm(self._position) > self.rlim) and
-            np.all(np.linalg.norm(self._vel) > self.vlim)) 
+            np.all(np.linalg.norm(self._vel) > self.vlim) and
+            np.abs(self._angle) > 0.087) 
             
         self.missed = (self._position[1] <= 0 and
             np.all(np.linalg.norm(self._position) > self.rlim) and
-            np.all(np.linalg.norm(self._vel) < self.vlim))
+            np.all(np.linalg.norm(self._vel) < self.vlim) and
+            np.abs(self._angle) < 0.087)
 
         alpha = -100
         beta = -100
         gamma = -0.03
         delta = -0.3
 
-        shaping = alpha * np.linalg.norm(self._position) + beta * np.linalg.norm(self._vel)# - 0 * np.linalg.norm(self._current_action - self._prev_action)**2
+        shaping = alpha * np.linalg.norm(self._position) + beta * np.linalg.norm(self._vel) + beta * np.abs(self._angle) - 50*np.abs(self._angvel) # - 0 * np.linalg.norm(self._current_action - self._prev_action)**2
 
         if self.prev_shaping is not None:
             reward = shaping - self.prev_shaping

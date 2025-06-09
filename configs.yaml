@@ -7,11 +7,11 @@ defaults:
   offline_evaldir: ''
   seed: 0
   deterministic_run: False
-  steps: 5e5
+  steps: 8e5
   parallel: True
   eval_every: 5e4
   eval_episode_num: 10
-  log_every: 1e4
+  log_every: 5e4
   reset_every: 0
   device: 'cuda:0'
   compile: True
@@ -29,8 +29,8 @@ defaults:
   reward_EMA: True
 
   # Model
-  dyn_hidden: 256
-  dyn_deter: 256
+  dyn_hidden: 512
+  dyn_deter: 512
   dyn_stoch: 32
   dyn_discrete: 32
   dyn_rec_depth: 1
@@ -38,7 +38,7 @@ defaults:
   dyn_std_act: 'sigmoid2'
   dyn_min_std: 0.1
   grad_heads: ['decoder', 'reward', 'cont']
-  units: 256
+  units: 512
   act: 'SiLU'
   norm: True
   encoder:
