@@ -162,7 +162,7 @@ def make_env(config, mode, id):
         env = wrappers.NormalizeActions(env)
 
     elif suite == "land":
-        import envs.lander4 as lander
+        import envs.lander5 as lander
 
         env = lander.LanderEnv(task)
         env = wrappers.NormalizeActions(env)
@@ -233,7 +233,7 @@ def main(config):
     logdir.mkdir(parents=True, exist_ok=True)
     config.traindir.mkdir(parents=True, exist_ok=True)
     config.evaldir.mkdir(parents=True, exist_ok=True)
-    with open('configs.pkl', 'wb') as f:
+    with open(logdir / 'configs.pkl', 'wb') as f:
         pickle.dump(config,f)
     step = count_steps(config.traindir)
     # step in logger is environmental step

@@ -11,31 +11,8 @@ import quaternion
 
 
 class LanderVehicle:
-    def __init__(self, mass=500, inertia_tensor=np.eye(3), thruster_directions=None, thruster_positions=None, Isp=225):
+    def __init__(self, mass=500, inertia = 10, thruster_directions=None, thruster_positions=None, Isp=225):
         self.mass = np.array([mass])
-        # self.inertia = 0.25*self.mass/5*inertia_tensor
-        # self.Isp = Isp
-
-        # if thruster_positions is None:
-        #     self.thruster_positions = np.array([     # all positions in meters in body frame and from CG of vehicle
-        #         [0.0, -2.0, -1.0],
-        #         [0.0, 2.0, -1.0],
-        #         [-2.0, 0.0, -1.0],
-        #         [2.0, 0.0, -1.0],               
-        #     ])
-        # else:
-        #     self.thruster_positions = thruster_positions
-
-        # if thruster_directions is None:
-        #     self.thruster_directions = np.array([    # all directions in body frame (FRD)
-        #         [0.0, -1.0, 0.0], 
-        #         [0.0, 1.0, 0.0], 
-        #         [-1.0, 0.0, 0.0],
-        #         [1.0, 0.0, 0.0],
-        #     ]).T
-        # else:
-        #     self.thruster_directions = thruster_directions
-
 
 def moon_env():
     radius = 1737400 # [m]
@@ -79,43 +56,41 @@ class LanderEnv(Env):
             raise NotImplementedError(planet)
         
         self._state = None
-        # self._x = None
         self.num_episodes = num_episodes
         self.lander = lander_veh
-        self.gravity = np.array([0,-6.6743e-11*self.planet_mass/(self.radius**2)])
+        self.gravity = np.array([0,0,-6.6743e-11*self.planet_mass/(self.radius**2)])
         self.forceBody = None
 
-        # self.qlim = np.array([360,80,80])
-        # self.qmgn = np.array([360,67,67])
-        self.rlim = np.array([2,2])
-        self.vlim = np.array([0.5,0.5])
-        # self.q_radlim = np.array([0.2,0.2,np.inf])
-        # self.wlim = np.array([0.2,0.2,0.2])
-        # self.gslim = 79
+        self.rlim = np.array([2,2,2])
+        self.vlim = np.array([0.5,0.5, 0.5])
 
         self.max_steps = max_steps
         self.step_count = 0
 
         # State space: [x,z, x_vel, z_vel]
         self.stateHigh = np.array([
-            np.inf,  # max x position [m]
-            np.inf,  # max z position [m]
-            np.inf,  # max x velocity [m]
-            np.inf   # max z velocity [m]
+            np.inf,   # max x position [m]
+            np.inf,   # max y position [m]
+            np.inf,   # max z position [m]
+            np.inf,   # max x velocity [m]
+            np.inf,   # max y velocity [m]
+            np.inf,   # max z velocity [m]
         ], dtype=np.float32)
 
         self.stateLow = np.array([
-            -np.inf,  # min x position [m]
-            0,       # min z position [m]
-            -np.inf,  # min x velocity [m]
-            -np.inf   # min z velocity [m]
+            -np.inf,   # min x position [m]
+            -np.inf,   # min y position [m]
+            0,         # min z position [m]
+            -np.inf,   # min x velocity [m]
+            -np.inf,   # min y velocity [m]
+            -np.inf,   # min z velocity [m]
         ], dtype=np.float32)
 
         # Action space: [+x thrust, -x thrust, vertical thrust]
         # 4 RCS thrusters per side 
-        self.actionHigh = np.full(3, 3000, dtype=np.float32) # max thrust of RCS thrusters [N] 1000
+        self.actionHigh = np.full(5, 3000, dtype=np.float32) # max thrust of RCS thrusters [N] and moment 
 
-        self.actionLow = np.full(3, 0, dtype=np.float32) # min thrust of RCS thrusters [N] 1000
+        self.actionLow = np.full(5, 0, dtype=np.float32) # min thrust of RCS thrusters [N] and moment
 
         self.obs_space = gym.spaces.Dict({
                 'state': gym.spaces.Box(dtype=np.float32, shape= self.stateHigh.shape, low=self.stateLow, high=self.stateHigh),
@@ -156,13 +131,16 @@ class LanderEnv(Env):
         return [seed]
 
     def reset_model(self):
-        self._vel = np.array([np.random.uniform(-20,-10), 
+        self._vel = np.array([np.random.uniform(-10,10), 
+                              np.random.uniform(-10,10),
                               np.random.uniform(-30,-20)]).T # initial velocity [m/s]
         
         self._v0 = self._vel
         
-        self._position = np.array([np.random.uniform(0,200), 
+        self._position = np.array([np.random.uniform(-100,100), 
+                                   np.random.uniform(-100,100), 
                                    np.random.uniform(200,300)]).T # initial position [m]
+        
         
         self._state = np.hstack((self._position, self._vel))
 
@@ -225,24 +203,29 @@ class LanderEnv(Env):
 
         # return an average of the derivative over tk, tk + dt
         self._state = yk + (dt / 6) * (f1 + (2 * f2) + (2 * f3) + f4)
-        self._position = self._state[0:2]
-        self._vel = self._state[2:4]
+        self._position = self._state[0:3]
+        self._vel = self._state[3:6]
+    
 
     def sixDOFDynamics(self, t, state, *args):
         action = args[0]
-        position = state[0:2]
-        vel = state[2:4]
+        position = state[0:3]
+        vel = state[3:6]
 
-        self.mpower = np.any(action[2])
-        self.spower = np.any(action[0:2]) 
+
+        self.mpower = np.any(action[4])
+        self.spower = np.any(action[0:4]) 
         xthrust = action[0] - action[1]  # total thrust in x direction
-        zthrust = action[2]  # total thrust in z direction
-        self.forceBody = np.array([xthrust, zthrust])  # force in body frame
+        ythrust = action[2] - action[3]  # total thrust in y direction
+        zthrust = action[4]  # total thrust in z direction
+        self.forceBody = np.array([xthrust, ythrust, zthrust])  # force in body frame
 
         mass = self.lander.mass
 
+        acc_body = self.forceBody/mass + self.gravity
+
         position_dot = vel
-        vel_dot = self.forceBody/mass + self.gravity
+        vel_dot = acc_body
 
         x_dot = np.hstack ((position_dot, vel_dot))
         return x_dot
@@ -251,15 +234,15 @@ class LanderEnv(Env):
 
         reward = 0
 
-        self.landed = (self._position[1] <= 0 and
+        self.landed = (self._position[2] <= 0 and
             np.all(np.linalg.norm(self._position) < self.rlim) and
-            np.all(np.linalg.norm(self._vel) < self.vlim))   
+            np.all(np.linalg.norm(self._vel) < self.vlim))  
 
-        self.crashed = (self._position[1] <= 0 and
+        self.crashed = (self._position[2] <= 0 and
             np.all(np.linalg.norm(self._position) > self.rlim) and
             np.all(np.linalg.norm(self._vel) > self.vlim)) 
             
-        self.missed = (self._position[1] <= 0 and
+        self.missed = (self._position[2] <= 0 and
             np.all(np.linalg.norm(self._position) > self.rlim) and
             np.all(np.linalg.norm(self._vel) < self.vlim))
 
@@ -268,13 +251,13 @@ class LanderEnv(Env):
         gamma = -0.03
         delta = -0.3
 
-        shaping = alpha * np.linalg.norm(self._position) + beta * np.linalg.norm(self._vel)# - 0 * np.linalg.norm(self._current_action - self._prev_action)**2
+        shaping = alpha * np.linalg.norm(self._position) + beta * np.linalg.norm(self._vel) # - 0 * np.linalg.norm(self._current_action - self._prev_action)**2
 
         if self.prev_shaping is not None:
             reward = shaping - self.prev_shaping
         self.prev_shaping = shaping
 
-        reward += gamma * self.spower + delta * self.mpower
+        reward += gamma * self.spower + delta * self.mpower 
 
         if self.landed:
             reward = 100
@@ -301,7 +284,7 @@ class LanderEnv(Env):
         self.step_count += 1
         # Check for non-finite or out-of-bounds state
         nonfinite = not np.isfinite(self._state).all()
-        out_of_bounds =  self._position[1] < 0 or np.any(self._position > 1e3)
+        out_of_bounds =  self._position[2] < 0 or np.any(self._position > 1e3)
         if out_of_bounds: print('out of bounds!')
         # out_of_bounds = np.any(self._state[:3] > 1e3) or np.any(self._state[:3] < -1e3)
         self.done = self.step_count >= self.max_steps or nonfinite or out_of_bounds or self.landed or self.crashed or self.missed
