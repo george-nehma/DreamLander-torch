@@ -248,8 +248,8 @@ class LanderEnv(Env):
 
         alpha = -100
         beta = -100
-        gamma = -0.03
-        delta = -0.3
+        gamma = -0.3
+        delta = -0.6
 
         shaping = alpha * np.linalg.norm(self._position) + beta * np.linalg.norm(self._vel) # - 0 * np.linalg.norm(self._current_action - self._prev_action)**2
 

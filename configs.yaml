@@ -20,7 +20,7 @@ defaults:
   video_pred_log: False
 
   # Environment
-  task: 'land_custom'
+  task: 'land_3dofT'
   size: [64, 64]
   action_repeat: 8
   time_limit: 5000 # train_length = time_limit/action_repeat
